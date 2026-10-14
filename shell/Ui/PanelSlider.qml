@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 
 Item {
   id: root
@@ -10,9 +11,9 @@ Item {
   property real maximum: 1
   property real step: 0.05
   property bool integer: false
-  property color trackColor: bar ? Style.selectedFillFor(bar.foreground, Color.accent) : "#333"
-  property color fillColor: bar ? bar.foreground : Color.foreground
-  property color knobColor: bar ? bar.foreground : Color.foreground
+  property color trackColor: bar ? Style.selectedFillFor(bar.foreground, Commons.Color.accent) : "#333"
+  property color fillColor: bar ? bar.foreground : Commons.Color.foreground
+  property color knobColor: bar ? bar.foreground : Commons.Color.foreground
   property bool dragging: false
   property real trackHeight: Math.max(4, Math.round(Style.spacing.controlHeight * 0.11))
   property real knobSize: Math.max(14, Math.round(Style.spacing.controlHeight * 0.38))
@@ -23,7 +24,7 @@ Item {
   // crossing the track shows). Purely visual — snapping is the caller's job via
   // `integer`/`step` or an index-based value. Default 0 leaves the track plain.
   property int tickCount: 0
-  property color tickColor: bar ? bar.background : Color.background
+  property color tickColor: bar ? bar.background : Commons.Color.background
 
   onValueChanged: if (!dragging) liveValue = value
 
@@ -40,8 +41,12 @@ Item {
   readonly property real range: Math.max(0.0001, maximum - minimum)
   readonly property real progress: Math.max(0, Math.min(1, (liveValue - minimum) / range))
   readonly property bool _hot: mouseArea.containsMouse || root.dragging
-
-  readonly property real knobCenter: track.x + track.width * progress
+  // In a mirrored (right-to-left) layout the anchored fill already starts at
+  // the right; the knob, ticks, and pointer are placed by x, so they flip here.
+  readonly property bool mirrored: LayoutMirroring.enabled
+  function trackX(fraction) {
+    return track.x + track.width * (root.mirrored ? 1 - fraction : fraction)
+  }
 
   Rectangle {
     id: track
@@ -66,7 +71,7 @@ Item {
 
     Behavior on width {
       enabled: !root.dragging
-      NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+      NumberAnimation { duration: Style.duration(140); easing.type: Easing.OutCubic }
     }
   }
 
@@ -79,7 +84,7 @@ Item {
       radius: 1
       color: root.tickColor
       anchors.verticalCenter: track.verticalCenter
-      x: track.x + track.width * (index / (root.tickCount - 1)) - width / 2
+      x: root.trackX(index / (root.tickCount - 1)) - width / 2
     }
   }
 
@@ -91,16 +96,16 @@ Item {
     color: root.knobColor
     borderSpec: Border.flat(root.bar ? root.bar.background : "#101315", Math.max(1, Style.space(2)))
     anchors.verticalCenter: track.verticalCenter
-    x: root.knobCenter - width / 2
+    x: root.trackX(root.progress) - width / 2
     scale: root._hot ? 1.15 : 1.0
 
     Behavior on x {
       enabled: !root.dragging
-      NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+      NumberAnimation { duration: Style.duration(140); easing.type: Easing.OutCubic }
     }
 
     Behavior on scale {
-      NumberAnimation { duration: 110; easing.type: Easing.OutCubic }
+      NumberAnimation { duration: Style.duration(110); easing.type: Easing.OutCubic }
     }
   }
 
@@ -113,8 +118,9 @@ Item {
 
     function valueFromX(x) {
       if (track.width <= 0) return root.minimum
-      var clamped = Math.max(0, Math.min(1, (x - track.x) / track.width))
-      var raw = root.minimum + clamped * root.range
+      var fraction = Math.max(0, Math.min(1, (x - track.x) / track.width))
+      if (root.mirrored) fraction = 1 - fraction
+      var raw = root.minimum + fraction * root.range
       if (root.integer) raw = Math.round(raw)
       return Math.max(root.minimum, Math.min(root.maximum, raw))
     }
